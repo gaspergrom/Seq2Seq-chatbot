@@ -1,8 +1,3 @@
-# Building a ChatBot with Deep NLP
- 
- 
-
-# Importing the libraries
 import numpy as np
 import tensorflow as tf
 import re
@@ -11,28 +6,20 @@ import time
  
 
 
-########## PART 1 - DATA PREPROCESSING ##########
- 
- 
- 
-# Importing the dataset
 lines = open('movie_lines.txt', encoding = 'utf-8', errors = 'ignore').read().split('\n')
 conversations = open('movie_conversations.txt', encoding = 'utf-8', errors = 'ignore').read().split('\n')
  
-# Creating a dictionary that maps each line and its id
 id2line = {}
 for line in lines:
     _line = line.split(' +++$+++ ')
     if len(_line) == 5:
         id2line[_line[0]] = _line[4]
  
-# Creating a list of all of the conversations
 conversations_ids = []
 for conversation in conversations[:-1]:
     _conversation = conversation.split(' +++$+++ ')[-1][1:-1].replace("'", "").replace(" ", "")
     conversations_ids.append(_conversation.split(','))
  
-# Getting separately the questions and the answers
 questions = []
 answers = []
 for conversation in conversations_ids:
@@ -40,7 +27,6 @@ for conversation in conversations_ids:
         questions.append(id2line[conversation[i]])
         answers.append(id2line[conversation[i+1]])
  
-# Doing a first cleaning of the texts
 def clean_text(text):
     text = text.lower()
     text = re.sub(r"i'm", "i am", text)
@@ -60,17 +46,14 @@ def clean_text(text):
     text = re.sub(r"[-()\"#/@;:<>{}`+=~|.!?,]", "", text)
     return text
  
-# Cleaning the questions
 clean_questions = []
 for question in questions:
     clean_questions.append(clean_text(question))
  
-# Cleaning the answers
 clean_answers = []
 for answer in answers:
     clean_answers.append(clean_text(answer))
  
-# Filtering out the questions and answers that are too short or too long
 short_questions = []
 short_answers = []
 i = 0
@@ -88,7 +71,6 @@ for answer in short_answers:
         clean_questions.append(short_questions[i])
     i += 1
  
-# Creating a dictionary that maps each word to its number of occurrences
 word2count = {}
 for question in clean_questions:
     for word in question.split():
@@ -103,7 +85,6 @@ for answer in clean_answers:
         else:
             word2count[word] += 1
  
-# Creating two dictionaries that map the questions words and the answers words to a unique integer
 threshold_questions = 15
 questionswords2int = {}
 word_number = 0
@@ -119,22 +100,17 @@ for word, count in word2count.items():
         answerswords2int[word] = word_number
         word_number += 1
  
-# Adding the last tokens to these two dictionaries
 tokens = ['<PAD>', '<EOS>', '<OUT>', '<SOS>']
 for token in tokens:
     questionswords2int[token] = len(questionswords2int) + 1
 for token in tokens:
     answerswords2int[token] = len(answerswords2int) + 1
  
-# Creating the inverse dictionary of the answerswords2int dictionary
 answersints2word = {w_i: w for w, w_i in answerswords2int.items()}
  
-# Adding the End Of String token to the end of every answer
 for i in range(len(clean_answers)):
     clean_answers[i] += ' <EOS>'
  
-# Translating all the questions and the answers into integers
-# and Replacing all the words that were filtered out by <OUT> 
 questions_into_int = []
 for question in clean_questions:
     ints = []
@@ -154,7 +130,6 @@ for answer in clean_answers:
             ints.append(answerswords2int[word])
     answers_into_int.append(ints)
  
-# Sorting questions and answers by the length of questions
 sorted_clean_questions = []
 sorted_clean_answers = []
 for length in range(1, 25 + 1):
@@ -165,11 +140,6 @@ for length in range(1, 25 + 1):
  
  
  
-########## PART 2 - BUILDING THE SEQ2SEQ MODEL ##########
- 
- 
- 
-# Creating placeholders for the inputs and the targets
 def model_inputs():
     inputs = tf.placeholder(tf.int32, [None, None], name = 'input')
     targets = tf.placeholder(tf.int32, [None, None], name = 'target')
@@ -177,14 +147,12 @@ def model_inputs():
     keep_prob = tf.placeholder(tf.float32, name = 'keep_prob')
     return inputs, targets, lr, keep_prob
  
-# Preprocessing the targets
 def preprocess_targets(targets, word2int, batch_size):
     left_side = tf.fill([batch_size, 1], word2int['<SOS>'])
     right_side = tf.strided_slice(targets, [0,0], [batch_size, -1], [1,1])
     preprocessed_targets = tf.concat([left_side, right_side], 1)
     return preprocessed_targets
  
-# Creating the Encoder RNN
 def encoder_rnn(rnn_inputs, rnn_size, num_layers, keep_prob, sequence_length):
     lstm = tf.contrib.rnn.BasicLSTMCell(rnn_size)
     lstm_dropout = tf.contrib.rnn.DropoutWrapper(lstm, input_keep_prob = keep_prob)
@@ -196,7 +164,6 @@ def encoder_rnn(rnn_inputs, rnn_size, num_layers, keep_prob, sequence_length):
                                                                     dtype = tf.float32)
     return encoder_state
  
-# Decoding the training set
 def decode_training_set(encoder_state, decoder_cell, decoder_embedded_input, sequence_length, decoding_scope, output_function, keep_prob, batch_size):
     attention_states = tf.zeros([batch_size, 1, decoder_cell.output_size])
     attention_keys, attention_values, attention_score_function, attention_construct_function = tf.contrib.seq2seq.prepare_attention(attention_states, attention_option = "bahdanau", num_units = decoder_cell.output_size)
@@ -214,7 +181,6 @@ def decode_training_set(encoder_state, decoder_cell, decoder_embedded_input, seq
     decoder_output_dropout = tf.nn.dropout(decoder_output, keep_prob)
     return output_function(decoder_output_dropout)
  
-# Decoding the test/validation set
 def decode_test_set(encoder_state, decoder_cell, decoder_embeddings_matrix, sos_id, eos_id, maximum_length, num_words, decoding_scope, output_function, keep_prob, batch_size):
     attention_states = tf.zeros([batch_size, 1, decoder_cell.output_size])
     attention_keys, attention_values, attention_score_function, attention_construct_function = tf.contrib.seq2seq.prepare_attention(attention_states, attention_option = "bahdanau", num_units = decoder_cell.output_size)
@@ -235,7 +201,6 @@ def decode_test_set(encoder_state, decoder_cell, decoder_embeddings_matrix, sos_
                                                                                                                 scope = decoding_scope)
     return test_predictions
  
-# Creating the Decoder RNN
 def decoder_rnn(decoder_embedded_input, decoder_embeddings_matrix, encoder_state, num_words, sequence_length, rnn_size, num_layers, word2int, keep_prob, batch_size):
     with tf.variable_scope("decoding") as decoding_scope:
         lstm = tf.contrib.rnn.BasicLSTMCell(rnn_size)
@@ -271,7 +236,6 @@ def decoder_rnn(decoder_embedded_input, decoder_embeddings_matrix, encoder_state
                                            batch_size)
     return training_predictions, test_predictions
  
-# Building the seq2seq model
 def seq2seq_model(inputs, targets, keep_prob, batch_size, sequence_length, answers_num_words, questions_num_words, encoder_embedding_size, decoder_embedding_size, rnn_size, num_layers, questionswords2int):
     encoder_embedded_input = tf.contrib.layers.embed_sequence(inputs,
                                                               answers_num_words + 1,
@@ -294,12 +258,6 @@ def seq2seq_model(inputs, targets, keep_prob, batch_size, sequence_length, answe
     return training_predictions, test_predictions
  
  
- 
-########## PART 3 - TRAINING THE SEQ2SEQ MODEL ##########
- 
- 
- 
-# Setting the Hyperparameters
 epochs = 100
 batch_size = 32
 rnn_size = 1024
@@ -312,19 +270,15 @@ min_learning_rate = 0.0001
 keep_probability = 0.5
  
 
-# Defining a session
 tf.reset_default_graph()
 session = tf.InteractiveSession()
 
 inputs, targets, lr, keep_prob = model_inputs()
  
-# Setting the sequence length
 sequence_length = tf.placeholder_with_default(25, None, name = 'sequence_length')
  
-# Getting the shape of the inputs tensor
 input_shape = tf.shape(inputs)
  
-# Getting the training and test predictions
 training_predictions, test_predictions = seq2seq_model(tf.reverse(inputs, [-1]),
                                                        targets,
                                                        keep_prob,
@@ -338,7 +292,6 @@ training_predictions, test_predictions = seq2seq_model(tf.reverse(inputs, [-1]),
                                                        num_layers,
                                                        questionswords2int)
  
-# Setting up the Loss Error, the Optimizer and Gradient Clipping
 with tf.name_scope("optimization"):
     loss_error = tf.contrib.seq2seq.sequence_loss(training_predictions,
                                                   targets,
@@ -348,12 +301,10 @@ with tf.name_scope("optimization"):
     clipped_gradients = [(tf.clip_by_value(grad_tensor, -5., 5.), grad_variable) for grad_tensor, grad_variable in gradients if grad_tensor is not None]
     optimizer_gradient_clipping = optimizer.apply_gradients(clipped_gradients)
  
-# Padding the sequences with the <PAD> token
 def apply_padding(batch_of_sequences, word2int):
     max_sequence_length = max([len(sequence) for sequence in batch_of_sequences])
     return [sequence + [word2int['<PAD>']] * (max_sequence_length - len(sequence)) for sequence in batch_of_sequences]
  
-# Splitting the data into batches of questions and answers
 def split_into_batches(questions, answers, batch_size):
     for batch_index in range(0, len(questions) // batch_size):
         start_index = batch_index * batch_size
@@ -363,14 +314,12 @@ def split_into_batches(questions, answers, batch_size):
         padded_answers_in_batch = np.array(apply_padding(answers_in_batch, answerswords2int))
         yield padded_questions_in_batch, padded_answers_in_batch
  
-# Splitting the questions and answers into training and validation sets
 training_validation_split = int(len(sorted_clean_questions) * 0.15)
 training_questions = sorted_clean_questions[training_validation_split:]
 training_answers = sorted_clean_answers[training_validation_split:]
 validation_questions = sorted_clean_questions[:training_validation_split]
 validation_answers = sorted_clean_answers[:training_validation_split]
  
-# Training
 batch_index_check_training_loss = 100
 batch_index_check_validation_loss = ((len(training_questions)) // batch_size // 2) - 1
 total_training_loss_error = 0
@@ -433,23 +382,16 @@ print("Game Over")
      
  
  
-########## PART 4 - TESTING THE SEQ2SEQ MODEL ##########
- 
- 
-'''
-# Loading the weights and Running the session
 checkpoint = "./chatbot_weights.ckpt"
 session = tf.InteractiveSession()
 session.run(tf.global_variables_initializer())
 saver = tf.train.Saver()
 saver.restore(session, checkpoint)
  
-# Converting the questions from strings to lists of encoding integers
 def convert_string2int(question, word2int):
     question = clean_text(question)
     return [word2int.get(word, word2int['<OUT>']) for word in question.split()]
 
-# Setting up the chat
 while(True):
     question = input("You: ")
     if question == 'Goodbye':
@@ -473,4 +415,3 @@ while(True):
         if token == '.':
             break
     print('ChatBot: ' + answer)
-'''
